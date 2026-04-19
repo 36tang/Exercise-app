@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Workout Timer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+/* ── DARK ── */
+:root {
+  --bg:         #0d0f11;
+  --surface:    #161a1e;
+  --surface2:   #1e2329;
+  --border:     #232830;
+  --accent:     #FF6E00;
+  --accent-dim: rgba(255,110,0,0.15);
+  --rest:       #3b82f6;
+  --rest-dim:   rgba(59,130,246,0.15);
+  --text:       #f0f2f4;
+  --muted:      #6b7580;
+  --green:      #22c55e;
+  --red:        #ef4444;
+  --tog-bg:     #232830;
+  --tog-on:     #FF6E00;
+}
+/* ── LIGHT ── */
+.light {
+  --bg:         #f5f4f0;
+  --surface:    #ffffff;
+  --surface2:   #ede9e3;
+  --border:     #ddd9d2;
+  --accent:     #e05c00;
+  --accent-dim: rgba(224,92,0,0.1);
+  --rest:       #2563eb;
+  --rest-dim:   rgba(37,99,235,0.1);
+  --text:       #1a1a1a;
+  --muted:      #888070;
+  --green:      #16a34a;
+  --red:        #dc2626;
+  --tog-bg:     #ddd9d2;
+  --tog-on:     #e05c00;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden;transition:background .25s,color .25s}
+#app{width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+/* ── HEADER ── */
+.header{display:flex;align-items:center;gap:6px;padding:8px 14px 7px;border-bottom:1px solid var(--border);flex-shrink:0}
+.routine-toggle{display:flex;align-items:center;background:var(--tog-bg);border-radius:20px;padding:3px;gap:2px;flex-shrink:0}
+.rtab{font-size:9px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border-radius:16px;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all .2s;white-space:nowrap}
+.rtab.active{background:var(--tog-on);color:#fff}
+.hspace{flex:1}
+.hcount{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0}
+.hcount span{color:var(--text);font-weight:500}
+.theme-btn{width:30px;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.theme-btn:active{transform:scale(.92)}
+
+/* ── PROGRESS ── */
+.prog-track{height:2px;background:var(--border);flex-shrink:0}
+.prog-fill{height:100%;background:var(--accent);transition:width .4s ease}
+
+/* ── TIMER VIEW ── */
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 20px 4px;min-height:0}
+.phase-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.2em;text-transform:uppercase;font-weight:500;margin-bottom:10px;padding:4px 10px;border-radius:20px;transition:all .3s;flex-shrink:0}
+.phase-label.work {color:var(--accent);background:var(--accent-dim)}
+.phase-label.rest {color:var(--rest);background:var(--rest-dim)}
+.phase-label.ready{color:var(--muted);background:var(--surface2)}
+.ring-container{position:relative;width:160px;height:160px;margin-bottom:14px;flex-shrink:0}
+.ring-svg{width:160px;height:160px;transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--border);stroke-width:4}
+.ring-fill{fill:none;stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset .8s linear,stroke .3s ease}
+.ring-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.timer-number{font-size:52px;font-weight:800;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;transition:color .3s}
+.timer-number.work {color:var(--accent)}
+.timer-number.rest {color:var(--rest)}
+.timer-number.ready{color:var(--muted)}
+.round-badge{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1em}
+.exercise-name{font-size:19px;font-weight:700;text-align:center;line-height:1.2;letter-spacing:-.01em;margin-bottom:4px}
+.exercise-focus{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-align:center;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+.exercise-cue{font-size:15.5px;color:var(--muted);text-align:center;line-height:1.5;max-width:260px}
+.next-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;width:100%;max-width:270px;flex-shrink:0}
+.next-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.next-name{font-size:12px;font-weight:600;color:var(--text);opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── CONTROLS ── */
+.controls{padding:8px 18px 12px;display:flex;gap:10px;flex-shrink:0}
+.btn{border:none;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.04em;border-radius:10px;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{transform:scale(.96)}
+.btn-primary{flex:1;height:48px;font-size:14px;background:var(--accent);color:#fff}
+.btn-primary.rest-mode{background:var(--rest)}
+.btn-secondary{width:48px;height:48px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:18px}
+
+/* ── DONE SCREEN ── */
+.done-screen{display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;padding:20px}
+.done-screen.show{display:flex}
+.done-icon{font-size:44px}
+.done-title{font-size:22px;font-weight:800;text-align:center}
+.done-sub{font-size:12px;color:var(--muted);text-align:center;line-height:1.5;font-family:'DM Mono',monospace}
+.btn-restart{margin-top:10px;padding:13px 26px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.04em}
+
+/* ── LIST OVERLAY (exercise jump list) ── */
+.list-overlay{display:none;position:absolute;inset:0;background:var(--bg);z-index:100;flex-direction:column}
+.list-overlay.open{display:flex}
+.list-header{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.list-title{font-size:13px;font-weight:700}
+.list-meta{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px}
+.list-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:4px}
+.list-scroll{flex:1;overflow-y:auto;padding:6px 12px 12px}
+.list-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;margin-bottom:2px;cursor:pointer;transition:background .15s}
+.list-item:active{background:var(--surface2)}
+.list-item.active{background:var(--accent-dim)}
+.list-item.completed{opacity:.4}
+.list-num{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);width:16px;text-align:right;flex-shrink:0}
+.list-info{flex:1;min-width:0}
+.list-ex-name{font-size:13px;font-weight:600;margin-bottom:1px}
+.list-ex-focus{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.06em}
+.list-dot{width:6px;height:6px;border-radius:50%;background:var(--border);flex-shrink:0}
+.list-item.active .list-dot{background:var(--accent)}
+.list-item.completed .list-dot{background:var(--green)}
+
+/* ── CUSTOM BUILDER ── */
+.builder{display:none;flex:1;flex-direction:column;min-height:0}
+.builder.show{display:flex}
+
+/* Settings row */
+.bld-settings{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.bld-setting{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 4px}
+.bld-setting-label{font-size:8px;font-family:'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.bld-setting-val{font-size:16px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.bld-setting-unit{font-size:8px;font-family:'DM Mono',monospace;color:var(--muted)}
+.bld-setting-btns{display:flex;gap:4px;margin-top:2px}
+.bld-inc,.bld-dec{width:24px;height:24px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;transition:all .12s}
+.bld-inc:active,.bld-dec:active{transform:scale(.9)}
+
+/* Two-panel: queue + library */
+.bld-body{flex:1;display:flex;flex-direction:column;min-height:0}
+
+/* Queue */
+.bld-queue-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 6px;flex-shrink:0}
+.bld-section-title{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.bld-clear{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--red);background:none;border:none;cursor:pointer;padding:2px 0}
+.bld-queue{min-height:60px;max-height:38%;overflow-y:auto;padding:0 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
+.bld-empty{font-size:12px;color:var(--muted);text-align:center;padding:14px 0;font-family:'DM Mono',monospace}
+.q-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;margin-bottom:3px;background:var(--surface);border:1px solid var(--border)}
+.q-num{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);width:14px;text-align:right;flex-shrink:0}
+.q-info{flex:1;min-width:0}
+.q-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-focus{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.06em}
+.q-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 2px;line-height:1;flex-shrink:0}
+.q-remove:active{color:var(--red)}
+
+/* Library */
+.bld-lib-header{display:flex;align-items:center;gap:8px;padding:8px 14px 6px;flex-shrink:0}
+.bld-search{flex:1;height:32px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:12px;color:var(--text);font-family:'DM Mono',monospace;outline:none}
+.bld-search::placeholder{color:var(--muted)}
+.bld-search:focus{border-color:var(--accent)}
+.bld-cat-scroll{display:flex;gap:6px;padding:0 14px 6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.bld-cat-scroll::-webkit-scrollbar{display:none}
+.cat-pill{font-size:9px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.cat-pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.bld-lib{flex:1;overflow-y:auto;padding:0 10px 6px}
+.lib-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;margin-bottom:3px;cursor:pointer;transition:background .12s}
+.lib-item:active{background:var(--surface2)}
+.lib-item.added{background:var(--accent-dim)}
+.lib-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:var(--surface2)}
+.lib-info{flex:1;min-width:0}
+.lib-name{font-size:13px;font-weight:700;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-focus{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.06em}
+.lib-add{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s}
+.lib-item.added .lib-add{background:var(--green)}
+.lib-add:active{transform:scale(.88)}
+
+/* Start button */
+.bld-footer{padding:8px 14px 12px;flex-shrink:0}
+.bld-start{width:100%;height:48px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:all .15s}
+.bld-start:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.bld-start:not(:disabled):active{transform:scale(.98)}
+
+@keyframes pulse-timer{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.timer-number.urgent{animation:pulse-timer .5s ease infinite}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="routine-toggle">
+      <button class="rtab active" onclick="switchRoutine(0)">Morning</button>
+      <button class="rtab"        onclick="switchRoutine(1)">Evening</button>
+      <button class="rtab"        onclick="switchRoutine(2)">Custom</button>
+    </div>
+    <div class="hspace"></div>
+    <span class="hcount" id="hcount"><span id="exNum">1</span>/<span id="exTotal">11</span></span>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️</button>
+  </div>
+
+  <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+
+  <!-- TIMER VIEW -->
+  <div class="main" id="mainView">
+    <div class="phase-label ready" id="phaseLabel">READY</div>
+    <div class="ring-container">
+      <svg class="ring-svg" viewBox="0 0 160 160">
+        <circle class="ring-track" cx="80" cy="80" r="71"/>
+        <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="71"
+          stroke="var(--accent)" stroke-dasharray="446.1" stroke-dashoffset="0"/>
+      </svg>
+      <div class="ring-inner"><div class="timer-number ready" id="timerNum">40</div></div>
+    </div>
+    <div class="round-badge" id="roundBadge"></div>
+    <div class="exercise-name"  id="exName">Bird-Dog</div>
+    <div class="exercise-focus" id="exFocus">Spine Stability</div>
+    <div class="exercise-cue"   id="exCue">Alt sides slowly. Neutral neck. Fingertip to heel straight line.</div>
+    <div class="next-row" id="nextRow">
+      <span class="next-label">Next →</span>
+      <span class="next-name" id="nextName">Glute Bridges</span>
+    </div>
+  </div>
+
+  <!-- DONE SCREEN -->
+  <div class="done-screen" id="doneScreen">
+    <div class="done-icon"  id="doneIcon">🔥</div>
+    <div class="done-title" id="doneTitle">Morning Complete</div>
+    <div class="done-sub"   id="doneSub"></div>
+    <button class="btn-restart" onclick="restart()">Start Again</button>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls" id="controls">
+    <button class="btn btn-secondary" onclick="prevExercise()">‹</button>
+    <button class="btn btn-primary" id="mainBtn" onclick="togglePlay()"><span id="btnLabel">START</span></button>
+    <button class="btn btn-secondary" onclick="openList()">≡</button>
+  </div>
+
+  <!-- JUMP LIST -->
+  <div class="list-overlay" id="listOverlay">
+    <div class="list-header">
+      <div>
+        <div class="list-title" id="listTitle">Morning Routine</div>
+        <div class="list-meta"  id="listMeta">11 exercises · 40s / 20s · 1 round</div>
+      </div>
+      <button class="list-close" onclick="closeList()">×</button>
+    </div>
+    <div class="list-scroll" id="listScroll"></div>
+  </div>
+
+  <!-- CUSTOM BUILDER -->
+  <div class="builder" id="builder">
+
+    <!-- Settings -->
+    <div class="bld-settings">
+      <div class="bld-setting">
+        <div class="bld-setting-label">Work</div>
+        <div class="bld-setting-val" id="setWork">40</div>
+        <div class="bld-setting-unit">sec</div>
+        <div class="bld-setting-btns">
+          <button class="bld-dec" onclick="adjSetting('work',-5)">−</button>
+          <button class="bld-inc" onclick="adjSetting('work',+5)">+</button>
+        </div>
+      </div>
+      <div class="bld-setting">
+        <div class="bld-setting-label">Rest</div>
+        <div class="bld-setting-val" id="setRest">20</div>
+        <div class="bld-setting-unit">sec</div>
+        <div class="bld-setting-btns">
+          <button class="bld-dec" onclick="adjSetting('rest',-5)">−</button>
+          <button class="bld-inc" onclick="adjSetting('rest',+5)">+</button>
+        </div>
+      </div>
+      <div class="bld-setting">
+        <div class="bld-setting-label">Rounds</div>
+        <div class="bld-setting-val" id="setRounds">1</div>
+        <div class="bld-setting-unit">×</div>
+        <div class="bld-setting-btns">
+          <button class="bld-dec" onclick="adjSetting('rounds',-1)">−</button>
+          <button class="bld-inc" onclick="adjSetting('rounds',+1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bld-body">
+      <!-- Queue -->
+      <div class="bld-queue-header">
+        <span class="bld-section-title">Your Workout (<span id="qCount">0</span>)</span>
+        <button class="bld-clear" onclick="clearQueue()">Clear all</button>
+      </div>
+      <div class="bld-queue" id="bldQueue">
+        <div class="bld-empty" id="qEmpty">Tap exercises below to add them</div>
+      </div>
+
+      <!-- Library -->
+      <div class="bld-lib-header">
+        <input class="bld-search" id="libSearch" placeholder="Search exercises…" oninput="filterLib()" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="bld-cat-scroll" id="catScroll"></div>
+      <div class="bld-lib" id="bldLib"></div>
+    </div>
+
+    <div class="bld-footer">
+      <button class="bld-start" id="bldStartBtn" onclick="startCustom()" disabled>Add exercises to start</button>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════
+const ROUTINES = [
+  {
+    name:'Morning', label:'Morning Routine',
+    meta:'11 exercises · 40s / 20s · 1 round',
+    doneTitle:'Morning Complete', doneIcon:'🔥',
+    doneSub: n => `${n} exercises · 11 minutes\nGreat work today.`,
+    workTime:40, restTime:20, rounds:1,
+    exercises:[
+      {name:'Bird-Dog',              focus:'Spine Stability',       cue:'Alt sides slowly. Neutral neck. Fingertip to heel straight line.'},
+      {name:'Glute Bridges',         focus:'Glute Activation',      cue:'Drive through heels. Squeeze glutes at top to decompress back.'},
+      {name:'Dead Bug',              focus:'Core Bracing',          cue:'Back flat on mat. Exhale as you extend limbs.'},
+      {name:'Goblet Squat',          focus:'Quads & Core',          cue:'Hold at chest. 3s down, 1s up tempo.'},
+      {name:'Goblet Squat',          focus:'Quads & Core',          cue:'Maintain upright posture. Don\'t lean into lower back.'},
+      {name:'Suitcase Deadlift (L)', focus:'Anti-Rotation',         cue:'Weight in left hand. Hinge hips back like a door.'},
+      {name:'Suitcase Deadlift (R)', focus:'Anti-Rotation',         cue:'Weight in right hand. Resist side-leaning.'},
+      {name:'Band Pull-Aparts',      focus:'Postural / Upper Back', cue:'Pull across chest. Squeeze shoulder blades together.'},
+      {name:'Overhead Press (Alt)',   focus:'Shoulders',             cue:'Brace core tight before every lift. Don\'t arch.'},
+      {name:'Plank',                 focus:'Final Core Seal',       cue:'Forearms on mat. Hips tucked. Breathe through the nose.'},
+      {name:'Child\'s Pose',         focus:'Decompression',         cue:'Sit on heels, reach forward. Focus on breathing into lower back.'},
+    ]
+  },
+  {
+    name:'Evening', label:'Evening Routine',
+    meta:'6 exercises · 45s / 15s · 4 rounds',
+    doneTitle:'Evening Complete', doneIcon:'💪',
+    doneSub: n => `${n} exercises · 4 rounds · 32 minutes\nStrong session.`,
+    workTime:45, restTime:15, rounds:4,
+    exercises:[
+      {name:'Rowing Machine',       focus:'Back / Full Body',     cue:'High damper. Explosive leg drive. Lean back slightly at finish.'},
+      {name:'Dumbbell RDL',         focus:'Hamstrings / Glutes',  cue:'Keep weights mid-shin max. Focus on hamstring stretch.'},
+      {name:'Band Chest Press',     focus:'Chest / Triceps',      cue:'Anchor band behind you. 2s squeeze at peak extension.'},
+      {name:'Goblet Reverse Lunge', focus:'Glutes / Quads',       cue:'Step back to protect knees and stabilize back.'},
+      {name:'Renegade Rows',        focus:'Lats / Abs',           cue:'Plank on dumbbells. Row without rotating hips.'},
+      {name:'Child\'s Pose',        focus:'Recovery',             cue:'Performed at end of each round to decompress.'},
+    ]
+  }
+];
+
+// Exercise library — categories + icon emoji + cue
+const LIBRARY = [
+  // Core
+  {name:'Plank',             cat:'Core',      icon:'🧱', focus:'Core Stability',  cue:'Forearms on mat. Hips tucked. Breathe through the nose.'},
+  {name:'Dead Bug',          cat:'Core',      icon:'🧱', focus:'Core Bracing',    cue:'Back flat on mat. Exhale as you extend limbs.'},
+  {name:'Bird-Dog',          cat:'Core',      icon:'🧱', focus:'Spine Stability', cue:'Alt sides slowly. Neutral neck. Fingertip to heel straight line.'},
+  {name:'Hollow Hold',       cat:'Core',      icon:'🧱', focus:'Core Tension',    cue:'Lower back pressed to mat. Point toes. Breathe shallow.'},
+  {name:'Russian Twist',     cat:'Core',      icon:'🧱', focus:'Obliques',        cue:'Lean back 45°. Rotate through your torso, not your arms.'},
+  {name:'Mountain Climbers', cat:'Core',      icon:'🧱', focus:'Core / Cardio',   cue:'Hips level. Drive knees fast toward chest alternating.'},
+  {name:'Ab Wheel Rollout',  cat:'Core',      icon:'🧱', focus:'Anti-Extension',  cue:'Engage lats. Rollout until back is flat, then pull back.'},
+  // Lower Body
+  {name:'Goblet Squat',           cat:'Lower Body', icon:'🦵', focus:'Quads & Core',        cue:'Hold at chest. 3s down, 1s up tempo.'},
+  {name:'Goblet Reverse Lunge',   cat:'Lower Body', icon:'🦵', focus:'Glutes / Quads',       cue:'Step back to protect knees and stabilize back.'},
+  {name:'Glute Bridges',          cat:'Lower Body', icon:'🦵', focus:'Glute Activation',     cue:'Drive through heels. Squeeze glutes at top to decompress back.'},
+  {name:'Romanian Deadlift',      cat:'Lower Body', icon:'🦵', focus:'Hamstrings / Glutes',  cue:'Hinge at hips. Keep back flat. Feel stretch in hamstrings.'},
+  {name:'Suitcase Deadlift (L)',  cat:'Lower Body', icon:'🦵', focus:'Anti-Rotation',        cue:'Weight in left hand. Hinge hips back like a door.'},
+  {name:'Suitcase Deadlift (R)',  cat:'Lower Body', icon:'🦵', focus:'Anti-Rotation',        cue:'Weight in right hand. Resist side-leaning.'},
+  {name:'Wall Sit',               cat:'Lower Body', icon:'🦵', focus:'Quad Endurance',       cue:'Thighs parallel to floor. Back flat against wall. Breathe.'},
+  {name:'Step-Ups',               cat:'Lower Body', icon:'🦵', focus:'Glutes / Balance',     cue:'Drive through the heel on the box. Full hip extension at top.'},
+  {name:'Calf Raises',            cat:'Lower Body', icon:'🦵', focus:'Calves',               cue:'Full range. Pause at top. Slow eccentric down.'},
+  // Upper Body
+  {name:'Push-Ups',              cat:'Upper Body', icon:'💪', focus:'Chest / Triceps',      cue:'Chest to floor. Elbows 45° from body. Full lockout at top.'},
+  {name:'Band Chest Press',      cat:'Upper Body', icon:'💪', focus:'Chest / Triceps',      cue:'Anchor band behind you. 2s squeeze at peak extension.'},
+  {name:'Band Pull-Aparts',      cat:'Upper Body', icon:'💪', focus:'Upper Back / Posture', cue:'Pull across chest. Squeeze shoulder blades together.'},
+  {name:'Overhead Press (Alt)',   cat:'Upper Body', icon:'💪', focus:'Shoulders',            cue:'Brace core tight before every lift. Don\'t arch.'},
+  {name:'Renegade Rows',         cat:'Upper Body', icon:'💪', focus:'Lats / Abs',           cue:'Plank on dumbbells. Row without rotating hips.'},
+  {name:'Dumbbell Curl',         cat:'Upper Body', icon:'💪', focus:'Biceps',               cue:'Pin elbows to sides. Full supination at top.'},
+  {name:'Tricep Dips',           cat:'Upper Body', icon:'💪', focus:'Triceps',              cue:'Lower until elbows 90°. Press through heel of palm.'},
+  {name:'Face Pulls',            cat:'Upper Body', icon:'💪', focus:'Rear Delts',           cue:'Pull to forehead level. Externally rotate at end.'},
+  // Cardio
+  {name:'Rowing Machine',    cat:'Cardio', icon:'🚣', focus:'Full Body',     cue:'High damper. Explosive leg drive. Lean back slightly at finish.'},
+  {name:'Jumping Jacks',     cat:'Cardio', icon:'🚣', focus:'Cardio',        cue:'Arms fully extended overhead. Controlled rhythm.'},
+  {name:'High Knees',        cat:'Cardio', icon:'🚣', focus:'Cardio / Core', cue:'Drive knees to hip height. Pump arms. Stay on balls of feet.'},
+  {name:'Burpees',           cat:'Cardio', icon:'🚣', focus:'Full Body',     cue:'Chest to floor. Explosive jump. Clap overhead.'},
+  {name:'Jump Rope',         cat:'Cardio', icon:'🚣', focus:'Cardio',        cue:'Land softly on balls of feet. Keep elbows close to body.'},
+  {name:'Box Jumps',         cat:'Cardio', icon:'🚣', focus:'Power / Legs',  cue:'Swing arms. Land softly in squat. Step down, don\'t jump.'},
+  {name:'Battle Ropes',      cat:'Cardio', icon:'🚣', focus:'Cardio / Arms', cue:'Alternate waves. Keep hips hinged. Drive from shoulders.'},
+  // Mobility
+  {name:'Child\'s Pose',         cat:'Mobility', icon:'🧘', focus:'Decompression',    cue:'Sit on heels, reach forward. Focus on breathing into lower back.'},
+  {name:'Hip Flexor Stretch',    cat:'Mobility', icon:'🧘', focus:'Hip Flexors',       cue:'Lunge position. Tuck pelvis. Feel stretch in front hip.'},
+  {name:'Thoracic Rotation',     cat:'Mobility', icon:'🧘', focus:'Thoracic Spine',   cue:'Kneeling. Rotate open as far as possible. Follow hand with eyes.'},
+  {name:'World\'s Greatest Stretch', cat:'Mobility', icon:'🧘', focus:'Full Body Mobility', cue:'Lunge + rotate + reach. Move slowly through full range.'},
+  {name:'Cat-Cow',               cat:'Mobility', icon:'🧘', focus:'Spine',             cue:'Breathe into each position. Arch and round fully.'},
+  {name:'Pigeon Pose',           cat:'Mobility', icon:'🧘', focus:'Hips / Glutes',    cue:'Stay square. Breathe into hip. Hold and relax.'},
+];
+
+const CATEGORIES = ['All', ...new Set(LIBRARY.map(e => e.cat))];
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let routineIdx   = 0;
+let currentIdx   = 0;
+let currentRound = 1;
+let phase        = 'idle';
+let timeLeft     = 0;
+let totalDuration= 0;
+let timer        = null;
+let isPlaying    = false;
+let isDark       = true;
+
+// Custom builder state
+let customWork   = 40;
+let customRest   = 20;
+let customRounds = 1;
+let customQueue  = [];   // array of library item refs
+let activeCat    = 'All';
+
+// ═══════════════════════════════════════════════════════════════
+// DOM SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+const $  = id => document.getElementById(id);
+const timerNum    = $('timerNum'),   phaseLabel  = $('phaseLabel');
+const exName      = $('exName'),     exFocus     = $('exFocus');
+const exCue       = $('exCue'),      nextRow     = $('nextRow');
+const nextName    = $('nextName'),   ringFill    = $('ringFill');
+const mainBtn     = $('mainBtn'),    btnLabel    = $('btnLabel');
+const exNum       = $('exNum'),      exTotal     = $('exTotal');
+const progFill    = $('progFill');
+const mainView    = $('mainView'),   doneScreen  = $('doneScreen');
+const controls    = $('controls'),   builder     = $('builder');
+const roundBadge  = $('roundBadge');
+
+const R = 71;
+const CIRC = +(2 * Math.PI * R).toFixed(1); // 446.1
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function routine()   { return routineIdx === 2 ? customRoutine() : ROUTINES[routineIdx]; }
+function exercises() { return routine().exercises; }
+
+function customRoutine() {
+  const n = customQueue.length;
+  const totalSec = customRounds * n * (customWork + customRest);
+  const mins = Math.round(totalSec / 60);
+  return {
+    name:'Custom', label:'Custom Workout',
+    meta:`${n} exercises · ${customWork}s / ${customRest}s · ${customRounds} round${customRounds>1?'s':''}`,
+    doneTitle:'Workout Complete', doneIcon:'⚡',
+    doneSub: () => `${n} exercises · ${customRounds} round${customRounds>1?'s':''} · ~${mins} min\nNice work.`,
+    workTime: customWork, restTime: customRest, rounds: customRounds,
+    exercises: customQueue
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════════════════════
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROUTINE SWITCH
+// ═══════════════════════════════════════════════════════════════
+function switchRoutine(idx) {
+  clearInterval(timer); isPlaying = false;
+  routineIdx = idx; currentIdx = 0; currentRound = 1; phase = 'idle';
+
+  document.querySelectorAll('.rtab').forEach((t,i) => t.classList.toggle('active', i===idx));
+
+  const isCustom = idx === 2;
+  builder.classList.toggle('show', isCustom);
+  mainView.style.display    = isCustom ? 'none' : '';
+  controls.style.display    = isCustom ? 'none' : '';
+  doneScreen.classList.remove('show');
+  $('hcount').style.display = isCustom ? 'none' : '';
+  closeList();
+
+  if (!isCustom) {
+    $('listTitle').textContent = routine().label;
+    $('listMeta').textContent  = routine().meta;
+    renderExercise();
+    setIdleState();
+    btnLabel.textContent = 'START';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RING
+// ═══════════════════════════════════════════════════════════════
+function updateRing(remaining, total, color) {
+  ringFill.style.strokeDashoffset = CIRC * (1 - remaining / total);
+  ringFill.style.stroke = color;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER EXERCISE
+// ═══════════════════════════════════════════════════════════════
+function renderExercise() {
+  const ex  = exercises()[currentIdx];
+  const len = exercises().length;
+  const r   = routine();
+  exName.textContent  = ex.name;
+  exFocus.textContent = ex.focus;
+  exCue.textContent   = ex.cue;
+  exNum.textContent   = currentIdx + 1;
+  exTotal.textContent = len;
+
+  // Round badge (only show if more than 1 round)
+  if (r.rounds > 1) {
+    roundBadge.textContent = `Round ${currentRound} of ${r.rounds}`;
+    roundBadge.style.display = '';
+  } else {
+    roundBadge.style.display = 'none';
+  }
+
+  // Progress: account for rounds
+  const totalSteps = len * r.rounds;
+  const doneSteps  = (currentRound - 1) * len + currentIdx;
+  progFill.style.width = (doneSteps / totalSteps * 100) + '%';
+
+  const hasNext = currentIdx < len - 1 || currentRound < r.rounds;
+  nextRow.style.display = hasNext ? 'flex' : 'none';
+  if (hasNext) {
+    if (currentIdx < len - 1) {
+      nextName.textContent = exercises()[currentIdx + 1].name;
+    } else {
+      nextName.textContent = `Round ${currentRound + 1} → ${exercises()[0].name}`;
+    }
+  }
+  renderList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATES
+// ═══════════════════════════════════════════════════════════════
+function setIdleState() {
+  phase = 'idle';
+  const wt = routine().workTime;
+  timeLeft = totalDuration = wt;
+  timerNum.textContent = wt;
+  timerNum.className   = 'timer-number ready';
+  phaseLabel.className = 'phase-label ready'; phaseLabel.textContent = 'READY';
+  updateRing(wt, wt, 'var(--accent)');
+  mainBtn.className = 'btn btn-primary';
+}
+
+function startWork() {
+  phase = 'work';
+  const wt = routine().workTime;
+  timeLeft = totalDuration = wt;
+  timerNum.className   = 'timer-number work';
+  phaseLabel.className = 'phase-label work'; phaseLabel.textContent = 'WORK';
+  mainBtn.className    = 'btn btn-primary';
+  updateRing(wt, wt, 'var(--accent)'); tick();
+}
+
+function startRest() {
+  phase = 'rest';
+  const rt = routine().restTime;
+  timeLeft = totalDuration = rt;
+  timerNum.className   = 'timer-number rest';
+  phaseLabel.className = 'phase-label rest'; phaseLabel.textContent = 'REST';
+  mainBtn.className    = 'btn btn-primary rest-mode';
+  updateRing(rt, rt, 'var(--rest)'); tick();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO
+// ═══════════════════════════════════════════════════════════════
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function beep(freq, duration, volume) {
+  try {
+    const ctx  = getAudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+function playCountBeep(s) {
+  s === 1 ? beep(880, 0.3, 0.5) : beep(440, 0.1, 0.3);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TICK
+// ═══════════════════════════════════════════════════════════════
+function tick() {
+  clearInterval(timer);
+  if (!isPlaying) return;
+  timer = setInterval(() => {
+    timeLeft--;
+    const color = phase === 'work' ? 'var(--accent)' : 'var(--rest)';
+    updateRing(timeLeft, totalDuration, color);
+    timerNum.textContent = timeLeft;
+    timerNum.classList.toggle('urgent', timeLeft <= 5 && timeLeft > 0);
+    if (timeLeft <= 5 && timeLeft > 0) playCountBeep(timeLeft);
+    if (timeLeft <= 0) {
+      clearInterval(timer); timerNum.classList.remove('urgent');
+      if (phase === 'work') {
+        const r = routine();
+        const isLastEx    = currentIdx === exercises().length - 1;
+        const isLastRound = currentRound >= r.rounds;
+        if (isLastEx && isLastRound) {
+          finishWorkout();
+        } else {
+          startRest();
+        }
+      } else {
+        // advance
+        if (currentIdx < exercises().length - 1) {
+          currentIdx++;
+        } else {
+          currentIdx = 0;
+          currentRound++;
+        }
+        renderExercise();
+        startWork();
+      }
+    }
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAYBACK CONTROLS
+// ═══════════════════════════════════════════════════════════════
+function togglePlay() {
+  if (phase === 'idle') { isPlaying = true; btnLabel.textContent = 'PAUSE'; startWork(); return; }
+  isPlaying = !isPlaying;
+  btnLabel.textContent = isPlaying ? 'PAUSE' : 'RESUME';
+  isPlaying ? tick() : clearInterval(timer);
+}
+
+function prevExercise() {
+  clearInterval(timer); isPlaying = false;
+  if (phase !== 'rest' && currentIdx > 0) currentIdx--;
+  else if (phase !== 'rest' && currentIdx === 0 && currentRound > 1) {
+    currentRound--; currentIdx = exercises().length - 1;
+  }
+  renderExercise(); setIdleState(); btnLabel.textContent = 'START';
+}
+
+function finishWorkout() {
+  isPlaying = false; phase = 'done'; clearInterval(timer);
+  mainView.style.display = 'none'; controls.style.display = 'none';
+  $('doneSub').innerHTML = routine().doneSub(exercises().length).replace('\n','<br>');
+  $('doneTitle').textContent = routine().doneTitle;
+  $('doneIcon').textContent  = routine().doneIcon;
+  doneScreen.classList.add('show');
+  progFill.style.width = '100%';
+}
+
+function restart() {
+  currentIdx = 0; currentRound = 1; isPlaying = false; phase = 'idle'; clearInterval(timer);
+  doneScreen.classList.remove('show');
+  if (routineIdx === 2) {
+    // back to builder
+    builder.classList.add('show');
+    $('hcount').style.display = 'none';
+  } else {
+    mainView.style.display = ''; controls.style.display = '';
+    $('hcount').style.display = '';
+    renderExercise(); setIdleState(); btnLabel.textContent = 'START';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JUMP LIST
+// ═══════════════════════════════════════════════════════════════
+function openList()  { renderList(); $('listOverlay').classList.add('open'); }
+function closeList() { $('listOverlay').classList.remove('open'); }
+
+function renderList() {
+  const r = routine();
+  $('listTitle').textContent = r.label;
+  $('listMeta').textContent  = r.meta;
+  $('listScroll').innerHTML = exercises().map((ex, i) => {
+    const cls = 'list-item' + (i === currentIdx ? ' active' : i < currentIdx ? ' completed' : '');
+    return `<div class="${cls}" onclick="jumpTo(${i})">
+      <span class="list-num">${i+1}</span>
+      <div class="list-info">
+        <div class="list-ex-name">${ex.name}</div>
+        <div class="list-ex-focus">${ex.focus}</div>
+      </div>
+      <div class="list-dot"></div>
+    </div>`;
+  }).join('');
+}
+
+function jumpTo(i) {
+  clearInterval(timer); isPlaying = false; currentIdx = i; phase = 'idle';
+  renderExercise(); setIdleState(); btnLabel.textContent = 'START'; closeList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOM BUILDER
+// ═══════════════════════════════════════════════════════════════
+function adjSetting(type, delta) {
+  if (type === 'work')   { customWork   = Math.max(5,  customWork   + delta); $('setWork').textContent   = customWork; }
+  if (type === 'rest')   { customRest   = Math.max(0,  customRest   + delta); $('setRest').textContent   = customRest; }
+  if (type === 'rounds') { customRounds = Math.max(1,  customRounds + delta); $('setRounds').textContent = customRounds; }
+}
+
+function addToQueue(libIdx) {
+  customQueue.push({...LIBRARY[libIdx]});
+  renderQueue();
+  renderLibrary();
+}
+
+function removeFromQueue(qIdx) {
+  customQueue.splice(qIdx, 1);
+  renderQueue();
+  renderLibrary();
+}
+
+function clearQueue() {
+  customQueue = [];
+  renderQueue();
+  renderLibrary();
+}
+
+function renderQueue() {
+  const q = $('bldQueue');
+  $('qCount').textContent = customQueue.length;
+  const startBtn = $('bldStartBtn');
+  if (customQueue.length === 0) {
+    q.innerHTML = '<div class="bld-empty" id="qEmpty">Tap exercises below to add them</div>';
+    startBtn.disabled = true;
+    startBtn.textContent = 'Add exercises to start';
+    return;
+  }
+  startBtn.disabled = false;
+  startBtn.textContent = `Start Workout · ${customQueue.length} exercise${customQueue.length>1?'s':''}`;
+  q.innerHTML = customQueue.map((ex, i) => `
+    <div class="q-item">
+      <span class="q-num">${i+1}</span>
+      <div class="q-info">
+        <div class="q-name">${ex.name}</div>
+        <div class="q-focus">${ex.focus}</div>
+      </div>
+      <button class="q-remove" onclick="removeFromQueue(${i})">×</button>
+    </div>
+  `).join('');
+}
+
+function filterLib() {
+  renderLibrary();
+}
+
+function setCat(cat) {
+  activeCat = cat;
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.toggle('active', p.dataset.cat === cat));
+  renderLibrary();
+}
+
+function renderLibrary() {
+  const search = ($('libSearch').value || '').toLowerCase();
+  const filtered = LIBRARY.filter((ex, i) => {
+    const catOk  = activeCat === 'All' || ex.cat === activeCat;
+    const srchOk = !search || ex.name.toLowerCase().includes(search) || ex.focus.toLowerCase().includes(search);
+    return catOk && srchOk;
+  });
+
+  // Check which names are already in queue
+  const inQueue = new Set(customQueue.map(e => e.name));
+
+  $('bldLib').innerHTML = filtered.map(ex => {
+    const added = inQueue.has(ex.name);
+    const libIdx = LIBRARY.findIndex(l => l.name === ex.name);
+    return `<div class="lib-item${added?' added':''}" onclick="addToQueue(${libIdx})">
+      <div class="lib-icon">${ex.icon}</div>
+      <div class="lib-info">
+        <div class="lib-name">${ex.name}</div>
+        <div class="lib-focus">${ex.focus}</div>
+      </div>
+      <button class="lib-add" onclick="event.stopPropagation();addToQueue(${libIdx})">${added ? '✓' : '+'}</button>
+    </div>`;
+  }).join('') || `<div class="bld-empty">No exercises match</div>`;
+}
+
+function renderCategories() {
+  $('catScroll').innerHTML = CATEGORIES.map(cat =>
+    `<button class="cat-pill${cat===activeCat?' active':''}" data-cat="${cat}" onclick="setCat('${cat}')">${cat}</button>`
+  ).join('');
+}
+
+function startCustom() {
+  if (customQueue.length === 0) return;
+  // Hide builder, show timer
+  builder.classList.remove('show');
+  mainView.style.display = '';
+  controls.style.display = '';
+  $('hcount').style.display = '';
+  currentIdx = 0; currentRound = 1; phase = 'idle'; isPlaying = false;
+  clearInterval(timer);
+  renderExercise();
+  setIdleState();
+  btnLabel.textContent = 'START';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+renderCategories();
+renderQueue();
+renderLibrary();
+renderExercise();
+setIdleState();
+$('listTitle').textContent = ROUTINES[0].label;
+$('listMeta').textContent  = ROUTINES[0].meta;
+</script>
+</body>
+</html>

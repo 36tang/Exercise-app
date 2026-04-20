@@ -351,50 +351,67 @@ const controls=$('controls'), builder=$('builder'), roundBadge=$('roundBadge');
 const R=71, CIRC=+(2*Math.PI*R).toFixed(1);
 
 // ─── AUDIO ───────────────────────────────────────────────────────────────────
-// iOS Safari / GitHub Pages compatible approach:
-// 1. AudioContext is created synchronously on the very first user tap
-// 2. An inaudible tone is played immediately to satisfy iOS's gesture requirement
-// 3. beep() checks ctx.state === 'running' before playing — if not running, it
-//    means the gesture chain was broken and we skip gracefully
+// iOS Safari requires AudioContext to be created AND audio scheduled
+// synchronously within a direct user-gesture (onclick) call stack.
+// setInterval is NOT a user gesture. Strategy:
+//   - Create ctx on first tap (unlockAudio)
+//   - Play an audible confirmation beep immediately on START tap
+//   - Pre-schedule all countdown beeps using ctx.currentTime + offset
+//     so they are anchored to the gesture, not to setInterval
+//   - On each tick, also call beep() as a fallback for non-iOS browsers
 let ctx = null;
-let audioUnlocked = false;
 
 function unlockAudio() {
-  // This runs synchronously inside a tap/click handler — the only place
-  // iOS Safari allows audio to start
-  if (audioUnlocked) return;
+  if (ctx) {
+    // Already created — just resume if suspended (e.g. after backgrounding)
+    if (ctx.state === 'suspended') ctx.resume();
+    return;
+  }
   try {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Play a 1ms silent buffer — this is the iOS unlock handshake
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.001, ctx.sampleRate);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
-    audioUnlocked = true;
   } catch(e) {}
 }
 
-function beep(freq, dur, vol) {
-  if (!ctx || ctx.state !== 'running') return;
+function _tone(freq, startOffset, dur, vol) {
+  // Schedule a tone at ctx.currentTime + startOffset
+  // Safe to call from gesture handler OR setInterval
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
   try {
-    const now  = ctx.currentTime;
+    const t    = ctx.currentTime + startOffset;
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.type = 'sine';
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(vol, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-    osc.start(now);
-    osc.stop(now + dur + 0.05);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t);
+    osc.stop(t + dur + 0.1);
   } catch(e) {}
 }
 
-function playCountBeep(s) {
-  s === 1 ? beep(880, 0.25, 0.45) : beep(440, 0.08, 0.28);
+// Called synchronously from the START button tap — plays immediately
+// AND pre-schedules the last-5-seconds beeps for the current phase.
+// workDur = total seconds of the upcoming work or rest phase.
+function schedulePhaseBeeps(phaseDur) {
+  if (!ctx || phaseDur < 5) return;
+  // 5 countdown beeps: at (phaseDur-5), (phaseDur-4) ... (phaseDur-1) seconds from now
+  for (let s = 5; s >= 1; s--) {
+    const offset = phaseDur - s;
+    const freq   = s === 1 ? 880 : 440;
+    const vol    = s === 1 ? 0.45 : 0.28;
+    const dur    = s === 1 ? 0.25 : 0.08;
+    _tone(freq, offset, dur, vol);
+  }
 }
+
+// Confirmation beep on START / phase transition (called from gesture)
+function playStartBeep() { _tone(660, 0, 0.15, 0.35); }
+
+// Fallback tick beep from setInterval (works on non-iOS browsers)
+function playCountBeep(s) { _tone(s === 1 ? 880 : 440, 0, s === 1 ? 0.25 : 0.08, s === 1 ? 0.45 : 0.28); }
 
 // ─── WAKE LOCK ───────────────────────────────────────────────────────────────
 // Must be called with await. Works on HTTPS (GitHub Pages).
@@ -486,12 +503,14 @@ function setIdleState() {
   updateRing(wt,wt,'var(--accent)'); mainBtn.className='btn btn-primary';
 }
 
-function startWork() {
+function startWork(fromGesture=false) {
   phase='work'; const wt=routine().workTime; timeLeft=totalDuration=wt;
   timerNum.className='timer-number work';
   phaseLabel.className='phase-label work'; phaseLabel.textContent='WORK';
   mainBtn.className='btn btn-primary';
-  updateRing(wt,wt,'var(--accent)'); tick();
+  updateRing(wt,wt,'var(--accent)');
+  if (fromGesture) { playStartBeep(); schedulePhaseBeeps(wt); }
+  tick();
 }
 
 function startRest() {
@@ -499,7 +518,9 @@ function startRest() {
   timerNum.className='timer-number rest';
   phaseLabel.className='phase-label rest'; phaseLabel.textContent='REST';
   mainBtn.className='btn btn-primary rest-mode';
-  updateRing(rt,rt,'var(--rest)'); tick();
+  updateRing(rt,rt,'var(--rest)');
+  schedulePhaseBeeps(rt); // ctx already running, scheduling works from setInterval
+  tick();
 }
 
 // ─── TICK ─────────────────────────────────────────────────────────────────────
@@ -529,17 +550,28 @@ function tick() {
 
 // ─── PLAYBACK ─────────────────────────────────────────────────────────────────
 async function togglePlay() {
-  // MUST call unlockAudio() synchronously here — this IS the user gesture
+  // unlockAudio() MUST be called synchronously here — this IS the user gesture
   unlockAudio();
   if(phase==='idle'){
     isPlaying=true; btnLabel.textContent='PAUSE';
     await acquireWakeLock();
-    startWork(); return;
+    startWork(true); // true = from gesture, schedules beeps immediately
+    return;
   }
-  isPlaying=!isPlaying;
-  btnLabel.textContent=isPlaying?'PAUSE':'RESUME';
-  if(isPlaying){ await acquireWakeLock(); tick(); }
-  else { clearInterval(timer); await releaseWakeLock(); }
+  if(phase==='work'||phase==='rest'){
+    isPlaying=!isPlaying;
+    btnLabel.textContent=isPlaying?'PAUSE':'RESUME';
+    if(isPlaying){
+      await acquireWakeLock();
+      // Re-schedule remaining countdown beeps from current timeLeft
+      if(timeLeft<=5) schedulePhaseBeeps(0); // within countdown, just play now
+      else schedulePhaseBeeps(timeLeft);
+      tick();
+    } else {
+      clearInterval(timer);
+      await releaseWakeLock();
+    }
+  }
 }
 
 async function prevExercise() {
